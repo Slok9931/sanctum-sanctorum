@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Member, MemberTier, Order
@@ -39,7 +39,9 @@ def create_member(db: Session, data: MemberCreate, now: datetime) -> Member:
 
     Rules: email (already stripped + lowercased) must be unique -> 409; created_at = now.
     """
-    # TODO: reject an email that is already in use with 409
+    existing = db.scalar(select(Member).where(func.lower(Member.email) == data.email))
+    if existing is not None:
+        raise HTTPException(status_code=409, detail="A member with this email already exists")
     member = Member(name=data.name, email=data.email, tier=data.tier.value, created_at=now)
     db.add(member)
     db.commit()
