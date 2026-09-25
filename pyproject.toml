@@ -10,6 +10,13 @@ dependencies = [
     "pydantic>=2.6,<3.0",
 ]
 
+[project.optional-dependencies]
+# Only needed to talk to Postgres in deployment; the graded test suite runs on
+# SQLite and never imports this, so it stays optional rather than a hard dependency.
+postgres = [
+    "psycopg2-binary>=2.9",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",
