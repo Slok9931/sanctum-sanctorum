@@ -9,6 +9,11 @@ from app.schemas import TopBook
 
 
 def top_books(db: Session, limit: int = 5) -> List[TopBook]:
+    """Best-selling books.
+
+    Rules: copies_sold sums quantities over ``paid`` orders only; books with no sales are
+    excluded; sorted by copies_sold desc, then title asc; at most ``limit`` rows.
+    """
     copies_sold = func.sum(OrderItem.quantity)
     query = (
         select(Book.id, Book.title, copies_sold.label("copies_sold"))

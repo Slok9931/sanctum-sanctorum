@@ -33,6 +33,7 @@ def get_book(db: Session, book_id: int) -> Book:
 
 
 def update_book(db: Session, book_id: int, data: BookUpdate) -> Book:
+    """Apply a partial update. Only fields present in the request are changed; 404 if missing."""
     book = get_book(db, book_id)
     for field, value in data.model_dump(exclude_unset=True).items():
         setattr(book, field, value)
@@ -75,13 +76,17 @@ def list_books(
     total = db.scalar(select(func.count()).select_from(query.subquery()))
 
     sort_columns = {
-        "title": Book.title.asc(), "-title": Book.title.desc(),
-        "price": Book.price_cents.asc(), "-price": Book.price_cents.desc(),
+        "title": Book.title.asc(),
+        "-title": Book.title.desc(),
+        "price": Book.price_cents.asc(),
+        "-price": Book.price_cents.desc(),
     }
+    primary_order = sort_columns[sort] if sort else Book.id.asc()
     if sort:
-        query = query.order_by(sort_columns[sort], Book.id.asc())
+        query = query.order_by(primary_order, Book.id.asc())
     else:
-        query = query.order_by(Book.id.asc())
+        query = query.order_by(primary_order)
 
     books = db.scalars(query.limit(limit).offset(offset)).all()
+
     return BookPage(items=books, total=total, limit=limit, offset=offset)

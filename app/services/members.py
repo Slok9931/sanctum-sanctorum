@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import Member, MemberTier, Order, OrderStatus
-from app.schemas import MemberCreate, MemberStats
+from app.schemas import MemberCreate, MemberPage, MemberStats
 
 # Tiers from lowest to highest; a member's rank is their index in this list.
 TIER_ORDER: List[str] = [
@@ -57,6 +57,15 @@ def get_member(db: Session, member_id: int) -> Member:
     return member
 
 
+def list_members(db: Session, limit: int = 20, offset: int = 0) -> MemberPage:
+    """All members, ordered by id, paginated. (Optional extra — no filters required by SPEC.md,
+    just enough to browse the member list without pulling everything back at once.)
+    """
+    total = db.scalar(select(func.count()).select_from(Member))
+    members = db.scalars(select(Member).order_by(Member.id.asc()).limit(limit).offset(offset)).all()
+    return MemberPage(items=members, total=total, limit=limit, offset=offset)
+
+
 def list_member_orders(db: Session, member_id: int) -> List[Order]:
     """All orders of a member ordered by id ascending; 404 if the member is missing."""
     get_member(db, member_id)
@@ -64,13 +73,27 @@ def list_member_orders(db: Session, member_id: int) -> List[Order]:
 
 
 def get_member_stats(db: Session, member_id: int, now: datetime) -> MemberStats:
+    """Summarize a member's activity.
+
+    Rules:
+    - 404 if the member is missing.
+    - orders_paid / total_spent_cents consider only ``paid`` orders.
+    - active_loans counts every unreturned loan (overdue ones included).
+    - overdue_loans counts unreturned loans with now > due_at.
+    - late_fees_cents sums late fees of returned loans.
+    """
     member = get_member(db, member_id)
-    orders_paid, total_spent_cents = 0, 0
+
+    orders_paid = 0
+    total_spent_cents = 0
     for order in member.orders:
         if order.status == OrderStatus.PAID.value:
             orders_paid += 1
             total_spent_cents += order.total_cents
-    active_loans, overdue_loans, late_fees_cents = 0, 0, 0
+
+    active_loans = 0
+    overdue_loans = 0
+    late_fees_cents = 0
     for loan in member.loans:
         if loan.returned_at is None:
             active_loans += 1
@@ -78,7 +101,12 @@ def get_member_stats(db: Session, member_id: int, now: datetime) -> MemberStats:
                 overdue_loans += 1
         else:
             late_fees_cents += loan.late_fee_cents
+
     return MemberStats(
-        member_id=member.id, orders_paid=orders_paid, total_spent_cents=total_spent_cents,
-        active_loans=active_loans, overdue_loans=overdue_loans, late_fees_cents=late_fees_cents,
+        member_id=member.id,
+        orders_paid=orders_paid,
+        total_spent_cents=total_spent_cents,
+        active_loans=active_loans,
+        overdue_loans=overdue_loans,
+        late_fees_cents=late_fees_cents,
     )
